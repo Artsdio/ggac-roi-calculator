@@ -125,6 +125,19 @@ with st.sidebar:
     q_tambahan = st.number_input("Kelas tambahan taichi/yoga (sesi/bln)", value=8,  min_value=0, step=2)
     q_mandiri  = st.number_input("Mandiri tanpa PT (kunjungan/bln)",      value=30, min_value=0, step=5)
 
+    st.markdown('<div class="section-header">Harga per Sesi (Rp) — sesuai Pricelist</div>', unsafe_allow_html=True)
+    st.caption("Paket 8x. Couple = per orang. Group = per orang (min 3). Chair = per orang (avg 8 org).")
+    harga_private  = st.number_input("Harga — Private 1-on-1 /sesi",        value=195_000, step=5_000, format="%d")
+    harga_couple   = st.number_input("Harga — Couple /org/sesi",             value=160_000, step=5_000, format="%d")
+    harga_group    = st.number_input("Harga — Group /org/sesi",              value=110_000, step=5_000, format="%d")
+    harga_chair    = st.number_input("Harga — Chair exercise /org/sesi",     value=75_000,  step=5_000, format="%d")
+    harga_tambahan = st.number_input("Harga — Kelas tambahan /org/sesi",     value=100_000, step=5_000, format="%d")
+    harga_mandiri  = st.number_input("Harga — Mandiri tanpa PT /kunjungan",  value=50_000,  step=5_000, format="%d")
+    peserta_chair    = st.number_input("Peserta chair exercise (org/sesi)",  value=8,  min_value=1, step=1)
+    peserta_tambahan = st.number_input("Peserta kelas tambahan (org/sesi)",  value=8,  min_value=1, step=1)
+    peserta_group    = st.number_input("Peserta group (org/sesi)",           value=3,  min_value=1, step=1)
+    peserta_couple   = st.number_input("Peserta couple (org/sesi)",          value=2,  min_value=1, step=1)
+
     st.markdown('<div class="section-header">Biaya Tetap / Bulan</div>', unsafe_allow_html=True)
     b_trainer = st.number_input("Gaji trainer (Rp)",             value=6_000_000, step=500_000, format="%d")
     b_admin   = st.number_input("Administrasi &amp; ATK (Rp)",   value=500_000,   step=100_000, format="%d")
@@ -160,12 +173,12 @@ s_chair    = q_chair    * u
 s_tambahan = q_tambahan * u
 s_mandiri  = q_mandiri  * u
 
-rev_private  = s_private  * 195_000
-rev_couple   = s_couple   * 2 * 160_000
-rev_group    = s_group    * 3 * 110_000
-rev_chair    = s_chair    * 8 * 75_000
-rev_tambahan = s_tambahan * 8 * 100_000
-rev_mandiri  = s_mandiri  * 50_000
+rev_private  = s_private  * harga_private
+rev_couple   = s_couple   * peserta_couple   * harga_couple
+rev_group    = s_group    * peserta_group    * harga_group
+rev_chair    = s_chair    * peserta_chair    * harga_chair
+rev_tambahan = s_tambahan * peserta_tambahan * harga_tambahan
+rev_mandiri  = s_mandiri  * harga_mandiri
 total_rev    = rev_private + rev_couple + rev_group + rev_chair + rev_tambahan + rev_mandiri
 
 ins_tot_private  = s_private  * ins_private
