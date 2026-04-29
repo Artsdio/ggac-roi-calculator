@@ -78,7 +78,7 @@ def hitung(u_pct, growth_pct, cost_growth_pct,
            peserta_couple, peserta_group, peserta_chair, peserta_tambahan,
            ins_private, ins_couple, ins_group, ins_chair, ins_tambahan, ins_mandiri,
            b_trainer, b_admin, b_mkt, b_maint, b_sdm, b_supply, b_mgmt,
-           investasi, omzet_min, share_i, share_ii, proj_years):
+           investasi, modal_pengelola, omzet_min, share_i, share_ii, proj_years):
 
     u = u_pct / 100
     s_private  = q_private  * u
@@ -112,13 +112,18 @@ def hitung(u_pct, growth_pct, cost_growth_pct,
     hasil_ii    = laba_bersih * (share_ii / 100) if laba_bersih > 0 else 0
     hasil_i     = laba_bersih * (share_i  / 100) if laba_bersih > 0 else 0
     bep_met     = total_rev >= omzet_min
-    roi_pct     = (hasil_i * 12 / investasi * 100) if investasi > 0 else 0
+    roi_pct     = (hasil_i  * 12 / investasi       * 100) if investasi       > 0 else 0
+    roi_ii_pct  = (hasil_ii * 12 / modal_pengelola * 100) if modal_pengelola > 0 else 0
     margin      = (laba_bersih / total_rev * 100) if total_rev > 0 else 0
+    total_modal = investasi + modal_pengelola
+    pct_modal_i  = investasi       / total_modal * 100 if total_modal > 0 else 0
+    pct_modal_ii = modal_pengelola / total_modal * 100 if total_modal > 0 else 0
 
     months        = proj_years * 12
     cum_owner     = [-investasi]
-    cum_pengelola = [0]
+    cum_pengelola = [-modal_pengelola]
     bep_month     = None
+    bep_month_ii  = None
 
     for m in range(1, months + 1):
         yr      = (m - 1) // 12
@@ -129,14 +134,17 @@ def hitung(u_pct, growth_pct, cost_growth_pct,
         earn_ii = laba_m * (share_ii / 100) if laba_m > 0 and rev_m >= omzet_min else 0
         cum_owner.append(cum_owner[-1] + earn_i)
         cum_pengelola.append(cum_pengelola[-1] + earn_ii)
-        if bep_month is None and cum_owner[-1] >= 0:
-            bep_month = m
+        if bep_month    is None and cum_owner[-1]     >= 0: bep_month    = m
+        if bep_month_ii is None and cum_pengelola[-1] >= 0: bep_month_ii = m
 
     return dict(
         total_rev=total_rev, total_opex=total_opex, laba_bersih=laba_bersih,
-        hasil_ii=hasil_ii, hasil_i=hasil_i, bep_met=bep_met, roi_pct=roi_pct,
+        hasil_ii=hasil_ii, hasil_i=hasil_i, bep_met=bep_met,
+        roi_pct=roi_pct, roi_ii_pct=roi_ii_pct,
         margin=margin, cum_owner=cum_owner, cum_pengelola=cum_pengelola,
-        bep_month=bep_month, months=months,
+        bep_month=bep_month, bep_month_ii=bep_month_ii, months=months,
+        modal_pengelola=modal_pengelola, investasi=investasi,
+        total_modal=total_modal, pct_modal_i=pct_modal_i, pct_modal_ii=pct_modal_ii,
         rev_private=rev_private, rev_couple=rev_couple, rev_group=rev_group,
         rev_chair=rev_chair, rev_tambahan=rev_tambahan, rev_mandiri=rev_mandiri,
         total_insentif=total_insentif,
@@ -163,8 +171,11 @@ with st.sidebar:
     st.markdown("## ⚙️ Parameter Dasar")
 
     st.markdown('<div class="section-header">Investasi &amp; Bagi Hasil</div>', unsafe_allow_html=True)
-    investasi = st.number_input("Total investasi owner (Rp)", value=150_000_000, step=5_000_000, format="%d")
-    omzet_min = st.number_input("Target omzet minimum BEP (Rp/bln)", value=20_000_000, step=500_000, format="%d")
+    investasi        = st.number_input("Investasi owner / Pihak I (Rp)", value=101_553_000, step=5_000_000, format="%d",
+                                       help="Peralatan gym baru + fasilitas penunjang")
+    modal_pengelola  = st.number_input("Modal pengelola / Pihak II — nilai buku alat (Rp)", value=8_757_600, step=500_000, format="%d",
+                                       help="Nilai buku peralatan existing pengelola per 2026")
+    omzet_min        = st.number_input("Target omzet minimum BEP (Rp/bln)", value=20_000_000, step=500_000, format="%d")
     share_ii  = st.slider("Bagi hasil pengelola (%)", 50, 90, 70, 5)
     share_i   = 100 - share_ii
     st.caption(f"Pengelola: **{share_ii}%**  |  Owner: **{share_i}%**")
@@ -241,7 +252,7 @@ args_common = dict(
     ins_chair=ins_chair, ins_tambahan=ins_tambahan, ins_mandiri=ins_mandiri,
     b_trainer=b_trainer, b_admin=b_admin, b_mkt=b_mkt, b_maint=b_maint,
     b_sdm=b_sdm, b_supply=b_supply, b_mgmt=b_mgmt,
-    investasi=investasi, omzet_min=omzet_min,
+    investasi=investasi, modal_pengelola=modal_pengelola, omzet_min=omzet_min,
     share_i=share_i, share_ii=share_ii, proj_years=proj_years,
 )
 
@@ -257,8 +268,9 @@ skenarios = [
 
 
 # ─── TABS ─────────────────────────────────────────────────────────────────────
-tab_perbandingan, tab_p, tab_m, tab_o = st.tabs([
+tab_perbandingan, tab_modal, tab_p, tab_m, tab_o = st.tabs([
     "📊 Perbandingan Skenario",
+    "💰 Analisis Modal",
     "🔴 Pesimis",
     "🟡 Moderat",
     "🟢 Optimis",
@@ -294,8 +306,12 @@ with tab_perbandingan:
                     <td class="green" style="text-align:right;font-family:DM Mono,monospace;font-weight:600">{fmt_rp(d['hasil_i'])}</td></tr>
                 <tr><td style="color:#888780;padding:4px 0">ROI owner/thn</td>
                     <td class="{roi_cls}" style="text-align:right;font-family:DM Mono,monospace;font-weight:600">{d['roi_pct']:.1f}%</td></tr>
-                <tr><td style="color:#888780;padding:4px 0">Payback period</td>
+                <tr><td style="color:#888780;padding:4px 0">ROI pengelola/thn</td>
+                    <td class="blue" style="text-align:right;font-family:DM Mono,monospace;font-weight:600">{d['roi_ii_pct']:.1f}%</td></tr>
+                <tr><td style="color:#888780;padding:4px 0">Payback owner</td>
                     <td style="text-align:right;font-size:12px;color:#444441">{bep_str}</td></tr>
+                <tr><td style="color:#888780;padding:4px 0">Payback pengelola</td>
+                    <td style="text-align:right;font-size:12px;color:#444441">{"bln ke-"+str(d['bep_month_ii']) if d['bep_month_ii'] else "belum tercapai"}</td></tr>
                 <tr><td style="color:#888780;padding:4px 0">Status BEP</td>
                     <td style="text-align:right">{badge_bep}</td></tr>
                 <tr><td style="color:#888780;padding:4px 0">Kumulatif owner ({proj_years} thn)</td>
@@ -396,33 +412,43 @@ def render_tab_detail(d, nama, css, util, grow, cost):
 
     st.markdown(f'<div class="tab-desc">Asumsi: utilisasi <strong>{util}%</strong> · pertumbuhan pendapatan <strong>{grow}%/thn</strong> · kenaikan biaya <strong>{cost}%/thn</strong></div>', unsafe_allow_html=True)
 
-    # Metric cards
+    # Metric cards — baris 1: omzet & laba
     badge_bep = ('<span class="badge badge-green">✓ Di atas BEP</span>'
                  if bep_met else '<span class="badge badge-red">✗ Belum BEP</span>')
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
         cls = "green" if laba_bersih >= 0 else "red"
         st.markdown(f"""<div class="metric-card">
           <div class="metric-label">Laba bersih / bulan</div>
           <div class="metric-value {cls}">{fmt_rp(laba_bersih)}</div>
-          <div class="metric-sub">Margin {margin:.1f}%</div></div>""", unsafe_allow_html=True)
+          <div class="metric-sub">Margin {margin:.1f}%  ·  {badge_bep}</div></div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""<div class="metric-card">
           <div class="metric-label">Omzet / bulan</div>
           <div class="metric-value blue">{fmt_rp(total_rev)}</div>
-          <div class="metric-sub">{badge_bep}</div></div>""", unsafe_allow_html=True)
+          <div class="metric-sub">Biaya operasional {fmt_rp(total_opex)}</div></div>""", unsafe_allow_html=True)
     with c3:
         st.markdown(f"""<div class="metric-card">
           <div class="metric-label">Bagian pengelola / bulan</div>
           <div class="metric-value green">{fmt_rp(hasil_ii)}</div>
-          <div class="metric-sub">{share_ii}% dari laba bersih</div></div>""", unsafe_allow_html=True)
+          <div class="metric-sub">Bagian owner {fmt_rp(hasil_i)}/bln</div></div>""", unsafe_allow_html=True)
+
+    # Baris 2: ROI kedua pihak
+    c4, c5 = st.columns(2)
     with c4:
-        bep_str = f"BEP bln ke-{bep_month}" if bep_month else "BEP belum tercapai"
-        roi_cls = "green" if roi_pct >= 15 else "amber" if roi_pct >= 5 else "red"
-        st.markdown(f"""<div class="metric-card">
-          <div class="metric-label">ROI owner / tahun</div>
+        bep_str   = f"Payback owner bln ke-{bep_month}" if bep_month else "Payback owner belum tercapai"
+        roi_cls   = "green" if roi_pct >= 15 else "amber" if roi_pct >= 5 else "red"
+        st.markdown(f"""<div class="metric-card" style="border-left:4px solid #0F6E56">
+          <div class="metric-label">ROI Owner (Pihak I) / tahun</div>
           <div class="metric-value {roi_cls}">{roi_pct:.1f}%</div>
-          <div class="metric-sub">{bep_str}</div></div>""", unsafe_allow_html=True)
+          <div class="metric-sub">{bep_str}  ·  Modal {fmt_rp(d['investasi'])}</div></div>""", unsafe_allow_html=True)
+    with c5:
+        bep_str_ii  = f"Payback pengelola bln ke-{d['bep_month_ii']}" if d['bep_month_ii'] else "Payback pengelola belum tercapai"
+        roi_ii_cls  = "green" if d['roi_ii_pct'] >= 15 else "amber" if d['roi_ii_pct'] >= 5 else "red"
+        st.markdown(f"""<div class="metric-card" style="border-left:4px solid #185FA5">
+          <div class="metric-label">ROI Pengelola (Pihak II) / tahun</div>
+          <div class="metric-value {roi_ii_cls}">{d['roi_ii_pct']:.1f}%</div>
+          <div class="metric-sub">{bep_str_ii}  ·  Modal {fmt_rp(d['modal_pengelola'])}</div></div>""", unsafe_allow_html=True)
 
     # Charts
     col_left, col_right = st.columns([3, 2])
@@ -581,7 +607,9 @@ def render_tab_detail(d, nama, css, util, grow, cost):
     badge_str   = ('<span class="badge badge-green">✅ Layak (Viable)</span>'
                    if viable else '<span class="badge badge-red">⚠️ Perlu Penyesuaian</span>')
     bep_str2    = f"bulan ke-{bep_month}" if bep_month else "belum tercapai dalam rentang proyeksi ini"
+    bep_str2_ii = f"bulan ke-{d['bep_month_ii']}" if d['bep_month_ii'] else "belum tercapai dalam rentang proyeksi ini"
     roi_rank    = "sangat menarik" if roi_pct > 20 else "menarik" if roi_pct > 10 else "perlu review"
+    roi_ii_rank = "sangat menarik" if d['roi_ii_pct'] > 20 else "menarik" if d['roi_ii_pct'] > 10 else "perlu review"
     margin_rank = "sangat sehat" if margin > 30 else "cukup baik" if margin > 15 else "tipis, perlu optimasi"
     top_rev     = max(rev_items, key=lambda x: x[1])
     ins_pct     = (total_insentif / total_opex * 100) if total_opex > 0 else 0
@@ -593,15 +621,23 @@ def render_tab_detail(d, nama, css, util, grow, cost):
       memproyeksikan omzet bulanan <strong>{fmt_full(total_rev)}</strong>.
       {"Omzet melampaui target minimum BEP <strong>" + fmt_full(omzet_min) + "</strong>, bagi hasil dapat dibagikan." if bep_met else "Omzet belum mencapai target minimum BEP <strong>" + fmt_full(omzet_min) + "</strong>. Bagi hasil belum dapat dibagikan."}</p>
 
+      <h4>Return on Investment — Owner (Pihak I)</h4>
+      <p>Modal owner <strong>{fmt_full(d['investasi'])}</strong> ({d['pct_modal_i']:.1f}% total modal kas).
+      Payback period tercapai pada <strong>{bep_str2}</strong>.
+      ROI tahunan <strong>{roi_pct:.1f}%</strong> tergolong <strong>{roi_rank}</strong>.
+      Dalam {proj_years} tahun, kumulatif owner diproyeksikan <strong>{fmt_rp(cum_owner[-1])}</strong>.</p>
+
+      <h4>Return on Investment — Pengelola (Pihak II)</h4>
+      <p>Modal pengelola <strong>{fmt_full(d['modal_pengelola'])}</strong> berupa nilai buku peralatan existing
+      ({d['pct_modal_ii']:.1f}% total modal kas).
+      Payback period tercapai pada <strong>{bep_str2_ii}</strong>.
+      ROI tahunan <strong>{d['roi_ii_pct']:.1f}%</strong> tergolong <strong>{roi_ii_rank}</strong> —
+      jauh lebih tinggi dari owner karena modal kas pengelola lebih kecil namun porsi bagi hasil lebih besar ({share_ii}%).
+      Dalam {proj_years} tahun, kumulatif pengelola diproyeksikan <strong>{fmt_rp(cum_pengelola[-1])}</strong>.</p>
+
       <h4>Analisis Insentif Trainer</h4>
       <p>Total insentif <strong>{fmt_full(total_insentif)}</strong> ({ins_pct:.1f}% dari biaya operasional).
       Kelas dengan rasio insentif/pendapatan terendah adalah kandidat terbaik untuk di-scale.</p>
-
-      <h4>Return on Investment</h4>
-      <p>Payback period owner: <strong>{bep_str2}</strong>.
-      ROI tahunan owner <strong>{roi_pct:.1f}%</strong> tergolong <strong>{roi_rank}</strong>.
-      Dalam {proj_years} tahun, kumulatif owner <strong>{fmt_rp(cum_owner[-1])}</strong>
-      dan pengelola <strong>{fmt_rp(cum_pengelola[-1])}</strong>.</p>
 
       <h4>Rekomendasi</h4>
       <ol style="padding-left:1.2rem;line-height:2">
@@ -614,6 +650,166 @@ def render_tab_detail(d, nama, css, util, grow, cost):
 
 
 # ─── RENDER 3 TABS DETAIL ────────────────────────────────────────────────────
+with tab_modal:
+    d_ref = d_m  # gunakan skenario moderat sebagai referensi modal
+    st.markdown('<div class="section-header">💰 Kontribusi Modal Kedua Pihak</div>', unsafe_allow_html=True)
+
+    col_i, col_ii = st.columns(2)
+    with col_i:
+        st.markdown(f"""
+        <div class="metric-card" style="border-left:4px solid #0F6E56">
+          <div class="metric-label">Pihak I — Owner / Investor</div>
+          <div class="metric-value green">{fmt_full(investasi)}</div>
+          <div class="metric-sub">Peralatan gym baru + fasilitas penunjang · {d_ref['pct_modal_i']:.1f}% total modal kas</div>
+        </div>""", unsafe_allow_html=True)
+    with col_ii:
+        st.markdown(f"""
+        <div class="metric-card" style="border-left:4px solid #185FA5">
+          <div class="metric-label">Pihak II — Pengelola</div>
+          <div class="metric-value blue">{fmt_full(modal_pengelola)}</div>
+          <div class="metric-sub">Nilai buku peralatan existing 2026 · {d_ref['pct_modal_ii']:.1f}% total modal kas</div>
+        </div>""", unsafe_allow_html=True)
+
+    # Donut chart porsi modal
+    st.markdown('<div class="section-header">🥧 Porsi Modal vs Porsi Bagi Hasil</div>', unsafe_allow_html=True)
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        fig_donut_modal = go.Figure(go.Pie(
+            labels=["Owner (Pihak I)", "Pengelola (Pihak II)"],
+            values=[investasi, modal_pengelola],
+            hole=.55,
+            marker_colors=["#0F6E56", "#185FA5"],
+            textfont=dict(color="#1a1a1a", size=12),
+            textinfo="label+percent",
+        ))
+        fig_donut_modal.update_layout(
+            title=dict(text="Porsi Modal Kas", font=dict(color="#1a1a1a", size=13)),
+            paper_bgcolor="white", font=CHART_FONT,
+            margin=dict(l=16, r=16, t=40, b=16), height=260,
+            showlegend=False,
+            annotations=[dict(text=f"{fmt_rp(investasi+modal_pengelola)}<br>total",
+                              x=0.5, y=0.5, font=dict(size=11, color="#1a1a1a"),
+                              showarrow=False)]
+        )
+        st.plotly_chart(fig_donut_modal, use_container_width=True)
+
+    with col_c2:
+        fig_donut_bagi = go.Figure(go.Pie(
+            labels=["Owner (Pihak I)", "Pengelola (Pihak II)"],
+            values=[share_i, share_ii],
+            hole=.55,
+            marker_colors=["#0F6E56", "#185FA5"],
+            textfont=dict(color="#1a1a1a", size=12),
+            textinfo="label+percent",
+        ))
+        fig_donut_bagi.update_layout(
+            title=dict(text="Porsi Bagi Hasil Laba", font=dict(color="#1a1a1a", size=13)),
+            paper_bgcolor="white", font=CHART_FONT,
+            margin=dict(l=16, r=16, t=40, b=16), height=260,
+            showlegend=False,
+            annotations=[dict(text="Laba<br>bersih",
+                              x=0.5, y=0.5, font=dict(size=11, color="#1a1a1a"),
+                              showarrow=False)]
+        )
+        st.plotly_chart(fig_donut_bagi, use_container_width=True)
+
+    # ROI comparison per skenario
+    st.markdown('<div class="section-header">📈 Perbandingan ROI Owner vs Pengelola (per skenario)</div>', unsafe_allow_html=True)
+    roi_data = {
+        "Skenario":      ["🔴 Pesimis", "🟡 Moderat", "🟢 Optimis"],
+        "ROI Owner":     [d_p["roi_pct"],    d_m["roi_pct"],    d_o["roi_pct"]],
+        "ROI Pengelola": [d_p["roi_ii_pct"], d_m["roi_ii_pct"], d_o["roi_ii_pct"]],
+    }
+    fig_roi = go.Figure()
+    fig_roi.add_trace(go.Bar(name="ROI Owner/thn (%)", x=roi_data["Skenario"],
+        y=roi_data["ROI Owner"], marker_color=["#FACACA","#F5E3A0","#A8E6CC"],
+        text=[f"{v:.1f}%" for v in roi_data["ROI Owner"]], textposition="outside",
+        textfont=dict(color="#1a1a1a", size=11)))
+    fig_roi.add_trace(go.Bar(name="ROI Pengelola/thn (%)", x=roi_data["Skenario"],
+        y=roi_data["ROI Pengelola"], marker_color=["#E24B4A","#BA7517","#0F6E56"],
+        text=[f"{v:.1f}%" for v in roi_data["ROI Pengelola"]], textposition="outside",
+        textfont=dict(color="#1a1a1a", size=11)))
+    fig_roi.update_layout(
+        paper_bgcolor="white", plot_bgcolor="white", font=CHART_FONT,
+        barmode="group", margin=dict(l=16, r=16, t=16, b=48), height=300,
+        xaxis=dict(tickfont=TICK_FONT, linecolor="#D3D1C7"),
+        yaxis=dict(tickfont=TICK_FONT, gridcolor="#F0EEE8", linecolor="#D3D1C7",
+                   ticksuffix="%", title=dict(text="ROI / tahun (%)", font=TITLE_FONT)),
+        legend=dict(orientation="h", y=-0.22, x=0, font=dict(color="#1a1a1a", size=11)),
+    )
+    st.plotly_chart(fig_roi, use_container_width=True)
+
+    # Arus kas kedua pihak (skenario moderat)
+    st.markdown('<div class="section-header">📈 Proyeksi Arus Kas Kumulatif Kedua Pihak — Skenario Moderat</div>', unsafe_allow_html=True)
+    months_list_m = list(range(0, d_m["months"] + 1))
+    fig_both = go.Figure()
+    fig_both.add_trace(go.Scatter(x=months_list_m, y=d_m["cum_owner"],
+        name=f"Owner (modal {fmt_rp(investasi)})",
+        line=dict(color="#0F6E56", width=2.5), fill="tozeroy", fillcolor="rgba(15,110,86,.07)"))
+    fig_both.add_trace(go.Scatter(x=months_list_m, y=d_m["cum_pengelola"],
+        name=f"Pengelola (modal {fmt_rp(modal_pengelola)})",
+        line=dict(color="#185FA5", width=2.5), fill="tozeroy", fillcolor="rgba(24,95,165,.07)"))
+    fig_both.add_hline(y=0, line_dash="dash", line_color="#888780", line_width=1,
+                       annotation_text="Break-even", annotation_font=dict(color="#1a1a1a", size=11))
+    if d_m["bep_month"]:
+        fig_both.add_vline(x=d_m["bep_month"], line_dash="dot", line_color="#0F6E56", line_width=1.5,
+            annotation_text=f"BEP owner bln {d_m['bep_month']}", annotation_position="top right",
+            annotation_font=dict(color="#0F6E56", size=10))
+    if d_m["bep_month_ii"]:
+        fig_both.add_vline(x=d_m["bep_month_ii"], line_dash="dot", line_color="#185FA5", line_width=1.5,
+            annotation_text=f"BEP pengelola bln {d_m['bep_month_ii']}", annotation_position="top left",
+            annotation_font=dict(color="#185FA5", size=10))
+    fig_both.update_layout(
+        paper_bgcolor="white", plot_bgcolor="white", font=CHART_FONT,
+        margin=dict(l=16, r=16, t=16, b=48), height=340,
+        xaxis=dict(title=dict(text="Bulan", font=TITLE_FONT), tickfont=TICK_FONT,
+                   gridcolor="#F0EEE8", linecolor="#D3D1C7"),
+        yaxis=dict(title=dict(text="Rp kumulatif", font=TITLE_FONT), tickfont=TICK_FONT,
+                   gridcolor="#F0EEE8", linecolor="#D3D1C7", tickformat=",.0f", tickprefix="Rp "),
+        legend=dict(orientation="h", y=-0.2, x=0, font=dict(color="#1a1a1a", size=11)),
+        hovermode="x unified")
+    st.plotly_chart(fig_both, use_container_width=True)
+
+    # Tabel ringkasan modal
+    st.markdown('<div class="section-header">📋 Tabel Ringkasan — Modal, ROI &amp; Payback per Skenario</div>', unsafe_allow_html=True)
+    rows_modal = []
+    for nama, d, css, util, grow, cost in skenarios:
+        rows_modal.append({
+            "Skenario": nama,
+            "Modal Owner (Rp)":        fmt_full(investasi),
+            "Modal Pengelola (Rp)":    fmt_full(modal_pengelola),
+            "ROI Owner / thn":         f"{d['roi_pct']:.1f}%",
+            "ROI Pengelola / thn":     f"{d['roi_ii_pct']:.1f}%",
+            "Payback Owner":           f"Bln ke-{d['bep_month']}" if d['bep_month'] else "Belum tercapai",
+            "Payback Pengelola":       f"Bln ke-{d['bep_month_ii']}" if d['bep_month_ii'] else "Belum tercapai",
+            f"Kumulatif Owner {proj_years}thn": fmt_full(d['cum_owner'][-1]),
+            f"Kumulatif Pengelola {proj_years}thn": fmt_full(d['cum_pengelola'][-1]),
+        })
+    st.dataframe(pd.DataFrame(rows_modal).set_index("Skenario"), use_container_width=True)
+
+    # Catatan analisis
+    st.markdown(f"""
+    <div class="written-card" style="margin-top:16px">
+      <h4>📌 Analisis Keseimbangan Modal vs Bagi Hasil</h4>
+      <p>
+        Owner berkontribusi <strong>{fmt_full(investasi)}</strong> ({d_ref['pct_modal_i']:.1f}% modal kas)
+        dan mendapat <strong>{share_i}% bagi hasil</strong>.
+        Pengelola berkontribusi <strong>{fmt_full(modal_pengelola)}</strong> ({d_ref['pct_modal_ii']:.1f}% modal kas)
+        namun mendapat <strong>{share_ii}% bagi hasil</strong>.
+      </p>
+      <p>
+        Ketidakseimbangan ini <strong>dapat dijustifikasi</strong> karena pengelola menyumbangkan kontribusi non-kas bernilai tinggi:
+        keahlian Active Aging, kurikulum latihan, klien existing (15 orang), dan manajemen operasional harian —
+        yang secara praktis adalah aset tak berwujud (<em>intangible assets</em>) yang tidak mudah dinilai secara kas.
+      </p>
+      <p>
+        <strong>Rekomendasi:</strong> Nilailah kontribusi non-kas pengelola secara eksplisit dalam term sheet
+        (misalnya goodwill klien existing dinilai Rp X per klien aktif) agar posisi kedua pihak
+        seimbang secara legal dan tidak menimbulkan ambiguitas di masa depan.
+      </p>
+    </div>""", unsafe_allow_html=True)
+
+
 with tab_p:
     render_tab_detail(d_p, "Pesimis",  "pesimis", util_p, growth_p, cost_p)
 with tab_m:
