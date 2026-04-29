@@ -184,7 +184,7 @@ with st.sidebar:
     st.markdown('<div class="section-header">Investasi &amp; Bagi Hasil</div>', unsafe_allow_html=True)
 
     investasi = st.number_input("Investasi owner / Pihak I (Rp)",
-                                value=107_553_000, step=5_000_000, format="%d",
+                                value=120_000_000, step=5_000_000, format="%d",
                                 help="Peralatan gym baru + fasilitas penunjang")
     st.markdown(rp_cap(investasi), unsafe_allow_html=True)
 
