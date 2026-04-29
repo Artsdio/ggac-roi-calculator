@@ -166,20 +166,42 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ─── HELPER FORMAT RIBUAN (titik, gaya Indonesia) ────────────────────────────
+def rp(n):
+    """Format angka dengan pemisah ribuan titik: 1.500.000"""
+    return f"{int(round(n)):,}".replace(",", ".")
+
+def rp_cap(n):
+    """Caption berwarna hijau tua dengan format Rp x.xxx.xxx"""
+    return f'<span style="font-size:12px;color:#0F6E56;font-weight:600">→ Rp {rp(n)}</span>'
+
+
 # ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Parameter Dasar")
 
+    # ── Investasi & Bagi Hasil ────────────────────────────────────────────────
     st.markdown('<div class="section-header">Investasi &amp; Bagi Hasil</div>', unsafe_allow_html=True)
-    investasi        = st.number_input("Investasi owner / Pihak I (Rp)", value=101_553_000, step=5_000_000, format="%d",
-                                       help="Peralatan gym baru + fasilitas penunjang")
-    modal_pengelola  = st.number_input("Modal pengelola / Pihak II — nilai buku alat (Rp)", value=8_757_600, step=500_000, format="%d",
-                                       help="Nilai buku peralatan existing pengelola per 2026")
-    omzet_min        = st.number_input("Target omzet minimum BEP (Rp/bln)", value=20_000_000, step=500_000, format="%d")
-    share_ii  = st.slider("Bagi hasil pengelola (%)", 50, 90, 70, 5)
-    share_i   = 100 - share_ii
+
+    investasi = st.number_input("Investasi owner / Pihak I (Rp)",
+                                value=101_553_000, step=5_000_000, format="%d",
+                                help="Peralatan gym baru + fasilitas penunjang")
+    st.markdown(rp_cap(investasi), unsafe_allow_html=True)
+
+    modal_pengelola = st.number_input("Modal pengelola / Pihak II — nilai buku alat (Rp)",
+                                      value=8_757_600, step=500_000, format="%d",
+                                      help="Nilai buku peralatan existing pengelola per 2026")
+    st.markdown(rp_cap(modal_pengelola), unsafe_allow_html=True)
+
+    omzet_min = st.number_input("Target omzet minimum BEP (Rp/bln)",
+                                value=20_000_000, step=500_000, format="%d")
+    st.markdown(rp_cap(omzet_min), unsafe_allow_html=True)
+
+    share_ii = st.slider("Bagi hasil pengelola (%)", 50, 90, 70, 5)
+    share_i  = 100 - share_ii
     st.caption(f"Pengelola: **{share_ii}%**  |  Owner: **{share_i}%**")
 
+    # ── Volume Kelas ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">Volume Kelas / Bulan</div>', unsafe_allow_html=True)
     q_private  = st.number_input("Private 1-on-1 (sesi/bln)",           value=40, min_value=0, step=4)
     q_couple   = st.number_input("Couple / ber-2 (sesi/bln)",            value=16, min_value=0, step=2)
@@ -188,35 +210,86 @@ with st.sidebar:
     q_tambahan = st.number_input("Kelas tambahan taichi/yoga (sesi/bln)", value=8,  min_value=0, step=2)
     q_mandiri  = st.number_input("Mandiri tanpa PT (kunjungan/bln)",      value=30, min_value=0, step=5)
 
+    # ── Harga per Sesi ────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">Harga per Sesi (Rp)</div>', unsafe_allow_html=True)
-    harga_private  = st.number_input("Harga — Private 1-on-1 /sesi",       value=195_000, step=5_000, format="%d")
-    harga_couple   = st.number_input("Harga — Couple /org/sesi",            value=160_000, step=5_000, format="%d")
-    harga_group    = st.number_input("Harga — Group /org/sesi",             value=110_000, step=5_000, format="%d")
-    harga_chair    = st.number_input("Harga — Chair exercise /org/sesi",    value=75_000,  step=5_000, format="%d")
-    harga_tambahan = st.number_input("Harga — Kelas tambahan /org/sesi",    value=100_000, step=5_000, format="%d")
-    harga_mandiri  = st.number_input("Harga — Mandiri tanpa PT /kunjungan", value=50_000,  step=5_000, format="%d")
+
+    harga_private = st.number_input("Harga — Private 1-on-1 /sesi",
+                                    value=195_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_private), unsafe_allow_html=True)
+
+    harga_couple = st.number_input("Harga — Couple /org/sesi",
+                                   value=160_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_couple), unsafe_allow_html=True)
+
+    harga_group = st.number_input("Harga — Group /org/sesi",
+                                  value=110_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_group), unsafe_allow_html=True)
+
+    harga_chair = st.number_input("Harga — Chair exercise /org/sesi",
+                                  value=75_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_chair), unsafe_allow_html=True)
+
+    harga_tambahan = st.number_input("Harga — Kelas tambahan /org/sesi",
+                                     value=100_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_tambahan), unsafe_allow_html=True)
+
+    harga_mandiri = st.number_input("Harga — Mandiri tanpa PT /kunjungan",
+                                    value=50_000, step=5_000, format="%d")
+    st.markdown(rp_cap(harga_mandiri), unsafe_allow_html=True)
+
     peserta_chair    = st.number_input("Peserta chair exercise (org/sesi)", value=8, min_value=1, step=1)
     peserta_tambahan = st.number_input("Peserta kelas tambahan (org/sesi)", value=8, min_value=1, step=1)
     peserta_group    = st.number_input("Peserta group (org/sesi)",          value=3, min_value=1, step=1)
     peserta_couple   = st.number_input("Peserta couple (org/sesi)",         value=2, min_value=1, step=1)
 
+    # ── Biaya Tetap ───────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">Biaya Tetap / Bulan</div>', unsafe_allow_html=True)
-    b_trainer = st.number_input("Gaji trainer (Rp)",              value=6_000_000, step=500_000, format="%d")
-    b_admin   = st.number_input("Administrasi &amp; ATK (Rp)",    value=500_000,   step=100_000, format="%d")
-    b_mkt     = st.number_input("Marketing &amp; promosi (Rp)",   value=1_500_000, step=100_000, format="%d")
-    b_maint   = st.number_input("Maintenance alat (Rp)",          value=800_000,   step=100_000, format="%d")
-    b_sdm     = st.number_input("Pelatihan SDM (Rp)",             value=500_000,   step=100_000, format="%d")
-    b_supply  = st.number_input("Perlengkapan habis pakai (Rp)",  value=400_000,   step=50_000,  format="%d")
-    b_mgmt    = st.number_input("Biaya manajemen operasional (Rp)", value=1_000_000, step=100_000, format="%d")
 
+    b_trainer = st.number_input("Gaji trainer (Rp)", value=6_000_000, step=500_000, format="%d")
+    st.markdown(rp_cap(b_trainer), unsafe_allow_html=True)
+
+    b_admin = st.number_input("Administrasi & ATK (Rp)", value=500_000, step=100_000, format="%d")
+    st.markdown(rp_cap(b_admin), unsafe_allow_html=True)
+
+    b_mkt = st.number_input("Marketing & promosi (Rp)", value=1_500_000, step=100_000, format="%d")
+    st.markdown(rp_cap(b_mkt), unsafe_allow_html=True)
+
+    b_maint = st.number_input("Maintenance alat (Rp)", value=800_000, step=100_000, format="%d")
+    st.markdown(rp_cap(b_maint), unsafe_allow_html=True)
+
+    b_sdm = st.number_input("Pelatihan SDM (Rp)", value=500_000, step=100_000, format="%d")
+    st.markdown(rp_cap(b_sdm), unsafe_allow_html=True)
+
+    b_supply = st.number_input("Perlengkapan habis pakai (Rp)", value=400_000, step=50_000, format="%d")
+    st.markdown(rp_cap(b_supply), unsafe_allow_html=True)
+
+    b_mgmt = st.number_input("Biaya manajemen operasional (Rp)", value=1_000_000, step=100_000, format="%d")
+    st.markdown(rp_cap(b_mgmt), unsafe_allow_html=True)
+
+    # ── Insentif per Kelas ────────────────────────────────────────────────────
     st.markdown('<div class="section-header">Insentif Trainer per Kelas (Rp/sesi)</div>', unsafe_allow_html=True)
-    ins_private  = st.number_input("Insentif — Private 1-on-1",   value=30_000, step=5_000, format="%d")
-    ins_couple   = st.number_input("Insentif — Couple / ber-2",   value=25_000, step=5_000, format="%d")
-    ins_group    = st.number_input("Insentif — Group 3-4 orang",  value=20_000, step=5_000, format="%d")
-    ins_chair    = st.number_input("Insentif — Chair exercise",    value=20_000, step=5_000, format="%d")
-    ins_tambahan = st.number_input("Insentif — Kelas tambahan",   value=25_000, step=5_000, format="%d")
-    ins_mandiri  = st.number_input("Insentif — Mandiri tanpa PT", value=0,      step=5_000, format="%d")
+    st.caption("Dihitung dari sesi aktual setelah utilisasi")
 
+    ins_private = st.number_input("Insentif — Private 1-on-1",  value=30_000, step=5_000, format="%d")
+    st.markdown(rp_cap(ins_private), unsafe_allow_html=True)
+
+    ins_couple = st.number_input("Insentif — Couple / ber-2",   value=25_000, step=5_000, format="%d")
+    st.markdown(rp_cap(ins_couple), unsafe_allow_html=True)
+
+    ins_group = st.number_input("Insentif — Group 3-4 orang",   value=20_000, step=5_000, format="%d")
+    st.markdown(rp_cap(ins_group), unsafe_allow_html=True)
+
+    ins_chair = st.number_input("Insentif — Chair exercise",     value=20_000, step=5_000, format="%d")
+    st.markdown(rp_cap(ins_chair), unsafe_allow_html=True)
+
+    ins_tambahan = st.number_input("Insentif — Kelas tambahan",  value=25_000, step=5_000, format="%d")
+    st.markdown(rp_cap(ins_tambahan), unsafe_allow_html=True)
+
+    ins_mandiri = st.number_input("Insentif — Mandiri tanpa PT", value=0,      step=5_000, format="%d")
+    st.markdown(rp_cap(ins_mandiri), unsafe_allow_html=True)
+
+
+    # ── Proyeksi & Asumsi Skenario ────────────────────────────────────────────
     st.markdown('<div class="section-header">Proyeksi</div>', unsafe_allow_html=True)
     proj_years = st.radio("Jangka proyeksi", [3, 5], horizontal=True)
 
@@ -225,19 +298,19 @@ with st.sidebar:
     st.caption("Sesuaikan utilisasi & pertumbuhan untuk tiap skenario")
 
     st.markdown("**🔴 Pesimis**")
-    util_p   = st.slider("Utilisasi pesimis (%)",   30, 80,  55, 5)
-    growth_p = st.slider("Pertumbuhan pesimis (%)",  0, 15,   3, 1)
-    cost_p   = st.slider("Kenaikan biaya pesimis (%)", 0, 20, 8, 1)
+    util_p   = st.slider("Utilisasi pesimis (%)",      30, 80,  55, 5)
+    growth_p = st.slider("Pertumbuhan pesimis (%)",     0, 15,   3, 1)
+    cost_p   = st.slider("Kenaikan biaya pesimis (%)", 0, 20,   8, 1)
 
     st.markdown("**🟡 Moderat**")
-    util_m   = st.slider("Utilisasi moderat (%)",   50, 90,  75, 5)
-    growth_m = st.slider("Pertumbuhan moderat (%)",  0, 25,  10, 1)
-    cost_m   = st.slider("Kenaikan biaya moderat (%)", 0, 15, 5, 1)
+    util_m   = st.slider("Utilisasi moderat (%)",      50, 90,  75, 5)
+    growth_m = st.slider("Pertumbuhan moderat (%)",     0, 25,  10, 1)
+    cost_m   = st.slider("Kenaikan biaya moderat (%)", 0, 15,   5, 1)
 
     st.markdown("**🟢 Optimis**")
-    util_o   = st.slider("Utilisasi optimis (%)",   70, 100, 90, 5)
-    growth_o = st.slider("Pertumbuhan optimis (%)",  5,  40, 20, 1)
-    cost_o   = st.slider("Kenaikan biaya optimis (%)", 0, 10, 3, 1)
+    util_o   = st.slider("Utilisasi optimis (%)",      70, 100, 90, 5)
+    growth_o = st.slider("Pertumbuhan optimis (%)",     5,  40, 20, 1)
+    cost_o   = st.slider("Kenaikan biaya optimis (%)", 0,  10,  3, 1)
 
 
 # ─── ARGUMEN UMUM ─────────────────────────────────────────────────────────────
