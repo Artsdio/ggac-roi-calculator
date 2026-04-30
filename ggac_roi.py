@@ -1,6 +1,8 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import openpyxl
+import io
 
 st.set_page_config(
     page_title="GGAC ROI Calculator",
@@ -166,6 +168,137 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+
+# ─── PARSER EXCEL MODAL_GGAC ────────────────────────────────────────────────
+def parse_modal_excel(file_bytes):
+    """
+    Baca Modal_GGAC_v2.xlsx dan kembalikan dict berisi nilai-nilai default
+    untuk sidebar. Baca dengan data_only=True agar dapat nilai hasil formula.
+    """
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    hasil = {}
+
+    # ── Sheet 1: Modal Pengelola ──────────────────────────────────────────────
+    if "Modal Pengelola" in wb.sheetnames:
+        ws = wb["Modal Pengelola"]
+        # Cari baris TOTAL (col A berisi "TOTAL")
+        for row in ws.iter_rows():
+            if str(row[0].value).strip().upper() == "TOTAL":
+                v = row[6].value   # kolom G = Nilai Buku
+                if isinstance(v, (int, float)):
+                    hasil["modal_pengelola"] = int(round(v))
+                break
+
+        # Baca umur ekonomis dari baris 6–10 col C
+        ue_map = {}
+        for r in range(6, 11):
+            v = ws.cell(r, 3).value
+            if isinstance(v, (int, float)):
+                ue_map[r] = int(v)
+        hasil["ue_map"] = ue_map   # {6: mesin, 7: matras, 8: besi, 9: elektronik, 10: aksesori}
+
+        # Baca data peralatan (harga beli col C, thn beli col D) mulai baris 14
+        items = []
+        for row in ws.iter_rows(min_row=14):
+            no  = row[0].value
+            hrg = row[2].value
+            thn = row[3].value
+            nb  = row[6].value
+            if not isinstance(no, int):
+                break
+            items.append({
+                "no": no,
+                "nama": row[1].value or "",
+                "harga": int(hrg) if isinstance(hrg, (int, float)) else 0,
+                "thn":   int(thn) if isinstance(thn, (int, float)) else 2020,
+                "nb":    int(round(nb)) if isinstance(nb, (int, float)) else 0,
+            })
+        hasil["peralatan"] = items
+
+    # ── Sheet 2: Investasi Investor ───────────────────────────────────────────
+    if "Investasi Investor" in wb.sheetnames:
+        ws2 = wb["Investasi Investor"]
+        # Cari baris TOTAL INVESTASI AWAL (col A mengandung "TOTAL INVESTASI")
+        for row in ws2.iter_rows():
+            cell_val = str(row[0].value or "").upper()
+            if "TOTAL INVESTASI" in cell_val:
+                v = row[4].value   # kolom E
+                if isinstance(v, (int, float)):
+                    hasil["investasi"] = int(round(v))
+                break
+
+        # Baca item gym (col B nama, C qty, D harga, E total) baris 6+
+        gym_items, pend_items = [], []
+        section = "gym"
+        for row in ws2.iter_rows(min_row=6):
+            label = str(row[0].value or "").upper()
+            if "SUBTOTAL" in label or "TOTAL" in label or "BUFFER" in label:
+                if "PENUNJANG" in str(row[0].value or "").upper():
+                    section = "pend"
+                continue
+            if "FASILITAS" in label:
+                section = "pend"; continue
+            nama = row[1].value
+            qty  = row[2].value
+            hrg  = row[3].value
+            tot  = row[4].value
+            if not isinstance(row[0].value, int):
+                continue
+            entry = {
+                "nama": str(nama or ""),
+                "qty":  int(qty) if isinstance(qty, (int, float)) else 1,
+                "harga": int(hrg) if isinstance(hrg, (int, float)) else 0,
+                "total": int(round(tot)) if isinstance(tot, (int, float)) else 0,
+            }
+            if section == "gym":
+                gym_items.append(entry)
+            else:
+                pend_items.append(entry)
+        hasil["gym_items"]  = gym_items
+        hasil["pend_items"] = pend_items
+
+    return hasil
+
+
+# ─── FILE UPLOADER ───────────────────────────────────────────────────────────
+with st.expander("📂 Import dari Excel — Modal_GGAC_v2.xlsx", expanded=False):
+    st.markdown(
+        "Upload file **Modal_GGAC_v2.xlsx** untuk mengisi otomatis nilai investasi & modal pengelola di sidebar. "
+        "Ubah angka di Excel → simpan → upload ulang → semua input terupdate."
+    )
+    uploaded = st.file_uploader(
+        "Pilih file Modal_GGAC_v2.xlsx", type=["xlsx"],
+        key="modal_upload", label_visibility="collapsed"
+    )
+
+    xl_data = {}
+    if uploaded is not None:
+        try:
+            xl_data = parse_modal_excel(uploaded.read())
+            st.success(
+                f"✅ File terbaca.  "
+                f"Modal pengelola: **Rp {xl_data.get('modal_pengelola',0):,}**  |  "
+                f"Investasi owner: **Rp {xl_data.get('investasi',0):,}**"
+                .replace(",", ".")
+            )
+            # Tampilkan ringkasan peralatan
+            if xl_data.get("peralatan"):
+                with st.expander("📋 Detail peralatan pengelola yang terbaca", expanded=False):
+                    df_pe = pd.DataFrame(xl_data["peralatan"])
+                    df_pe.columns = ["No","Nama","Harga Beli","Thn Beli","Nilai Buku"]
+                    for col in ["Harga Beli","Nilai Buku"]:
+                        df_pe[col] = df_pe[col].apply(lambda x: f"Rp {x:,}".replace(",","."))
+                    st.dataframe(df_pe.set_index("No"), use_container_width=True)
+            if xl_data.get("gym_items"):
+                with st.expander("📋 Detail investasi investor yang terbaca", expanded=False):
+                    df_gym = pd.DataFrame(xl_data["gym_items"])
+                    df_gym["total"] = df_gym["total"].apply(lambda x: f"Rp {x:,}".replace(",","."))
+                    st.dataframe(df_gym.rename(columns={"nama":"Item","qty":"Qty",
+                                 "harga":"Harga Satuan","total":"Total"}), use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Gagal membaca file: {e}. Pastikan format file adalah Modal_GGAC_v2.xlsx yang belum diubah strukturnya.")
+            xl_data = {}
+
 # ─── HELPER FORMAT RIBUAN (titik, gaya Indonesia) ────────────────────────────
 def rp(n):
     """Format angka dengan pemisah ribuan titik: 1.500.000"""
@@ -184,12 +317,14 @@ with st.sidebar:
     st.markdown('<div class="section-header">Investasi &amp; Bagi Hasil</div>', unsafe_allow_html=True)
 
     investasi = st.number_input("Investasi owner / Pihak I (Rp)",
-                                value=120_000_000, step=5_000_000, format="%d",
+                                value=xl_data.get("investasi", 101_553_000),
+                                step=5_000_000, format="%d",
                                 help="Peralatan gym baru + fasilitas penunjang")
     st.markdown(rp_cap(investasi), unsafe_allow_html=True)
 
     modal_pengelola = st.number_input("Modal pengelola / Pihak II — nilai buku alat (Rp)",
-                                      value=8_757_600, step=500_000, format="%d",
+                                      value=xl_data.get("modal_pengelola", 8_757_600),
+                                      step=500_000, format="%d",
                                       help="Nilai buku peralatan existing pengelola per 2026")
     st.markdown(rp_cap(modal_pengelola), unsafe_allow_html=True)
 
