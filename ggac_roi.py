@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import openpyxl
 import io
+from pdf_report import generate_pdf
 
 st.set_page_config(
     page_title="GGAC ROI Calculator",
@@ -1024,6 +1025,66 @@ with tab_m:
     render_tab_detail(d_m, "Moderat",  "moderat", util_m, growth_m, cost_m)
 with tab_o:
     render_tab_detail(d_o, "Optimis",  "optimis", util_o, growth_o, cost_o)
+
+
+# ─── TOMBOL CETAK / DOWNLOAD PDF ─────────────────────────────────────────────
+st.markdown("---")
+st.markdown('<div class="section-header">🖨️ Cetak / Download Laporan PDF</div>',
+            unsafe_allow_html=True)
+
+col_dl1, col_dl2 = st.columns([2, 3])
+with col_dl1:
+    st.markdown("""
+    <div style="background:#FFFFFF;border:1px solid #E8E6DE;border-radius:12px;
+                padding:1rem 1.25rem;font-size:13px;color:#444441;line-height:1.7">
+      <b>Laporan berisi:</b><br>
+      📄 Cover &amp; ringkasan eksekutif<br>
+      📊 Perbandingan 3 skenario (tabel + chart)<br>
+      💰 Struktur modal &amp; porsi bagi hasil<br>
+      📈 Proyeksi arus kas kumulatif<br>
+      🔍 Breakdown pendapatan &amp; biaya<br>
+      📋 ROI &amp; payback period semua skenario<br>
+      📝 Analisis &amp; rekomendasi strategis
+    </div>""", unsafe_allow_html=True)
+
+with col_dl2:
+    st.markdown("""
+    <div style="background:#F0FAF5;border:1px solid #A8E6CC;border-radius:12px;
+                padding:.75rem 1.25rem;font-size:12px;color:#444441;line-height:1.6;
+                margin-bottom:10px">
+      ⚡ PDF dihasilkan dari data aktual di sidebar saat ini.<br>
+      Ubah asumsi → klik tombol lagi → PDF terupdate otomatis.
+    </div>""", unsafe_allow_html=True)
+
+    if st.button("🖨️  Generate & Download Laporan PDF",
+                 type="primary", use_container_width=True):
+        with st.spinner("Menyusun laporan PDF..."):
+            try:
+                pdf_params = dict(
+                    d_p=d_p, d_m=d_m, d_o=d_o,
+                    investasi=investasi,
+                    modal_pengelola=modal_pengelola,
+                    share_i=share_i, share_ii=share_ii,
+                    proj_years=proj_years,
+                    omzet_min=omzet_min,
+                    growth_m=growth_m, cost_m=cost_m,
+                )
+                pdf_bytes = generate_pdf(pdf_params)
+                tanggal   = __import__('datetime').date.today().strftime('%Y%m%d')
+                st.download_button(
+                    label="📥  Klik di sini untuk download PDF",
+                    data=pdf_bytes,
+                    file_name=f"GGAC_ROI_Report_{tanggal}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+                st.success(
+                    f"✅ Laporan siap!  "
+                    f"({len(pdf_bytes)//1024} KB · 7 halaman · "
+                    f"3 skenario · proyeksi {proj_years} tahun)"
+                )
+            except Exception as e:
+                st.error(f"❌ Gagal generate PDF: {e}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption("GGAC ROI Calculator — Berdasarkan Term Sheet Kerjasama Operasional & Pricelist GGAC. Proyeksi bersifat estimasi.")
