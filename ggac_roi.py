@@ -456,17 +456,18 @@ with st.expander("📂 Import dari Excel — Modal_GGAC_v3.xlsx", expanded=False
             show_items(tab_f2, xl_data.get("fase2_gym",[]), "Fase 2")
             show_items(tab_pen, xl_data.get("pend_items",[]), "penunjang")
             
-            with tab_alat:
-                alat = xl_data.get("peralatan",[])
-                if alat:
-                    df_a = pd.DataFrame(alat)
-                    df_a["harga"] = df_a["harga"].apply(lambda x: f"Rp {rp(x)}")
-                    df_a["nb"] = df_a["nb"].apply(lambda x: f"Rp {rp(x)}")
-                    st.dataframe(
-                        df_a[["nama", "thn", "harga", "nb"]].rename(columns={
-                            "nama": "Alat", "thn": "Thn Beli",
-                            "harga": "Harga Beli", "nb": "Nilai Buku 2026"}),
-                        use_container_width=True)
+        with tab_alat:
+            alat = xl_data.get("peralatan",[])
+            if alat:
+                df_a = pd.DataFrame(alat)
+                df_a.index = range(1, len(df_a) + 1)  # ← TAMBAH BARIS INI
+                df_a["harga"] = df_a["harga"].apply(lambda x: f"Rp {rp(x)}")
+                df_a["nb"]    = df_a["nb"].apply(lambda x: f"Rp {rp(x)}")
+                st.dataframe(
+                    df_a[["nama", "thn", "harga", "nb"]].rename(columns={
+                        "nama": "Alat", "thn": "Thn Beli",
+                        "harga": "Harga Beli", "nb": "Nilai Buku 2026"}),
+                    use_container_width=True)
         
         except Exception as e:
             st.error(f"❌ Gagal membaca file: {e}")
