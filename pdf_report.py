@@ -311,6 +311,14 @@ def generate_pdf(params: dict) -> bytes:
     share_ii        = params["share_ii"]
     proj_years      = params["proj_years"]
     omzet_min       = params["omzet_min"]
+    # Fase info (opsional — ada jika upload Excel)
+    fase_label  = params.get("fase_label", "Fase 1")
+    sub_f1      = params.get("sub_fase1",  0)
+    sub_f2      = params.get("sub_fase2",  0)
+    sub_pend    = params.get("sub_pend",   0)
+    buf_pct     = params.get("buffer_pct", 0.10)
+    inv_f12     = params.get("investasi_f12", investasi)
+    has_fase    = sub_f1 > 0
 
     story = []
 
@@ -336,6 +344,7 @@ def generate_pdf(params: dict) -> bytes:
         [Paragraph("GGAC — Gym & Active Aging Program", S["subtitle"])],
         [Spacer(1, 16)],
         [Paragraph(
+            f"Skenario investasi: <b>{fase_label}</b>  ·  "
             f"Investasi Owner: <b>Rp {fmt(investasi)}</b>  ·  "
             f"Modal Pengelola: <b>Rp {fmt(modal_pengelola)}</b>  ·  "
             f"Proyeksi: <b>{proj_years} tahun</b>",
@@ -474,34 +483,78 @@ def generate_pdf(params: dict) -> bytes:
     story += section_rule("2.  STRUKTUR MODAL & BAGI HASIL")
 
     total_modal = investasi + modal_pengelola
-    pct_i  = investasi / total_modal * 100
-    pct_ii = modal_pengelola / total_modal * 100
+    pct_i  = investasi / total_modal * 100 if total_modal > 0 else 0
+    pct_ii = modal_pengelola / total_modal * 100 if total_modal > 0 else 0
 
-    story.append(Paragraph(
-        f"Total modal kas yang terlibat dalam operasional GGAC adalah "
-        f"<b>Rp {fmt(total_modal)}</b>. Owner berkontribusi <b>{pct_i:.1f}%</b> "
-        f"namun mendapat <b>{share_i}% bagi hasil</b>. Pengelola berkontribusi "
-        f"<b>{pct_ii:.1f}%</b> modal kas dan mendapat <b>{share_ii}% bagi hasil</b>. "
-        f"Ketidakseimbangan ini dijustifikasi oleh kontribusi non-kas pengelola berupa "
-        f"keahlian Active Aging, kurikulum, klien existing, dan manajemen operasional harian.",
-        S["body"]))
+    # Narasi berbeda tergantung apakah ada data fase
+    if has_fase:
+        fase2_note = (f" Fase 2 (pengembangan) senilai <b>Rp {fmt(sub_f2)}</b> "
+                      f"belum termasuk dalam laporan ini — akan diaktifkan saat Qty diubah dari 0."
+                      if sub_f2 == 0 else
+                      f" Fase 2 (pengembangan) senilai <b>Rp {fmt(sub_f2)}</b> sudah termasuk "
+                      f"dalam total investasi Fase 1+2 sebesar <b>Rp {fmt(inv_f12)}</b>.")
+        story.append(Paragraph(
+            f"Laporan ini dihitung berdasarkan <b>{fase_label}</b>. "
+            f"Investasi owner terdiri dari: peralatan gym Fase 1 <b>Rp {fmt(sub_f1)}</b>, "
+            f"fasilitas penunjang <b>Rp {fmt(sub_pend)}</b>, dan buffer {buf_pct*100:.0f}% "
+            f"sebesar <b>Rp {fmt(int(round((sub_f1+sub_pend)*buf_pct)))}</b>. "
+            f"Total investasi owner Fase 1: <b>Rp {fmt(investasi)}</b>.{fase2_note} "
+            f"Owner berkontribusi <b>{pct_i:.1f}%</b> modal kas dan mendapat <b>{share_i}% bagi hasil</b>. "
+            f"Pengelola berkontribusi <b>{pct_ii:.1f}%</b> modal kas (nilai buku peralatan existing) "
+            f"dan mendapat <b>{share_ii}% bagi hasil</b>.",
+            S["body"]))
+    else:
+        story.append(Paragraph(
+            f"Total modal kas yang terlibat dalam operasional GGAC adalah "
+            f"<b>Rp {fmt(total_modal)}</b>. Owner berkontribusi <b>{pct_i:.1f}%</b> "
+            f"dan mendapat <b>{share_i}% bagi hasil</b>. Pengelola berkontribusi "
+            f"<b>{pct_ii:.1f}%</b> modal kas dan mendapat <b>{share_ii}% bagi hasil</b>. "
+            f"Ketidakseimbangan ini dijustifikasi oleh kontribusi non-kas pengelola.",
+            S["body"]))
     story.append(Spacer(1, 8))
 
-    modal_rows = [
-        [("Investasi Owner — peralatan gym baru", "tbl_cell"),
-         (f"Rp {fmt(investasi)}", "tbl_num"), (f"{pct_i:.1f}%","tbl_num"), (f"{share_i}%","tbl_num_g")],
-        [("Modal Pengelola — nilai buku peralatan existing", "tbl_cell"),
-         (f"Rp {fmt(modal_pengelola)}", "tbl_num"), (f"{pct_ii:.1f}%","tbl_num"), (f"{share_ii}%","tbl_num_g")],
-        [("Kontribusi non-kas Owner — akses lokasi", "tbl_cell"),
-         ("Non-kas","tbl_cell"), ("—","tbl_cell"), ("Termasuk","tbl_cell")],
-        [("Kontribusi non-kas Pengelola — keahlian & klien", "tbl_cell"),
-         ("Non-kas","tbl_cell"), ("—","tbl_cell"), ("Termasuk","tbl_cell")],
-    ]
-    story.append(data_table(
-        ["Komponen Modal", "Nilai Kas (Rp)", "% Modal Kas", "% Bagi Hasil"],
-        modal_rows,
-        [8*cm, 3.5*cm, 2.5*cm, 2.5*cm]
-    ))
+    # Tabel modal — dengan breakdown Fase 1 / Fase 2 jika ada
+    if has_fase:
+        modal_rows = [
+            [("Peralatan gym Fase 1 (aktif)", "tbl_cell"),
+             (f"Rp {fmt(sub_f1)}", "tbl_num"), ("Owner","tbl_cell"),
+             (f"{sub_f1/total_modal*100:.1f}%","tbl_num"), ("Masuk ROI","tbl_cell")],
+            [("Fasilitas penunjang (Qty>0)", "tbl_cell"),
+             (f"Rp {fmt(sub_pend)}", "tbl_num"), ("Owner","tbl_cell"),
+             (f"{sub_pend/total_modal*100:.1f}%","tbl_num"), ("Masuk ROI","tbl_cell")],
+            [(f"Buffer {buf_pct*100:.0f}% biaya tak terduga", "tbl_cell"),
+             (f"Rp {fmt(int(round((sub_f1+sub_pend)*buf_pct)))}", "tbl_num"), ("Owner","tbl_cell"),
+             ("—","tbl_cell"), ("Masuk ROI","tbl_cell")],
+            [("Peralatan gym Fase 2 (Qty=0)", "tbl_cell"),
+             (f"Rp {fmt(sub_f2)}", "tbl_num"), ("Owner","tbl_cell"),
+             (f"{sub_f2/total_modal*100:.1f}% (jika dibeli)","tbl_num"),
+             ("Belum masuk ROI" if sub_f2==0 else "Masuk ROI F1+2","tbl_cell")],
+            [("Peralatan existing pengelola (nilai buku)", "tbl_cell"),
+             (f"Rp {fmt(modal_pengelola)}", "tbl_num"), ("Pengelola","tbl_cell"),
+             (f"{pct_ii:.1f}%","tbl_num"), ("Aktif","tbl_cell")],
+            [("Kontribusi non-kas (akses lokasi, keahlian, klien)", "tbl_cell"),
+             ("Non-kas","tbl_cell"), ("Kedua pihak","tbl_cell"),
+             ("—","tbl_cell"), ("Termasuk","tbl_cell")],
+        ]
+        story.append(data_table(
+            ["Komponen Modal","Nilai Kas (Rp)","Pihak","% Modal","Status"],
+            modal_rows, [6.5*cm, 3*cm, 2.2*cm, 2.8*cm, 2.5*cm]
+        ))
+    else:
+        modal_rows = [
+            [("Investasi Owner — peralatan gym & fasilitas", "tbl_cell"),
+             (f"Rp {fmt(investasi)}", "tbl_num"), (f"{pct_i:.1f}%","tbl_num"), (f"{share_i}%","tbl_num_g")],
+            [("Modal Pengelola — nilai buku peralatan existing", "tbl_cell"),
+             (f"Rp {fmt(modal_pengelola)}", "tbl_num"), (f"{pct_ii:.1f}%","tbl_num"), (f"{share_ii}%","tbl_num_g")],
+            [("Kontribusi non-kas Owner — akses lokasi", "tbl_cell"),
+             ("Non-kas","tbl_cell"), ("—","tbl_cell"), ("Termasuk","tbl_cell")],
+            [("Kontribusi non-kas Pengelola — keahlian & klien", "tbl_cell"),
+             ("Non-kas","tbl_cell"), ("—","tbl_cell"), ("Termasuk","tbl_cell")],
+        ]
+        story.append(data_table(
+            ["Komponen Modal", "Nilai Kas (Rp)", "% Modal Kas", "% Bagi Hasil"],
+            modal_rows, [8*cm, 3.5*cm, 2.5*cm, 2.5*cm]
+        ))
     story.append(Spacer(1, 8))
 
     # Bar chart porsi modal vs bagi hasil

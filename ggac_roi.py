@@ -173,102 +173,102 @@ st.markdown("""
 # ─── PARSER EXCEL MODAL_GGAC ────────────────────────────────────────────────
 def parse_modal_excel(file_bytes):
     """
-    Baca Modal_GGAC_v2.xlsx dan kembalikan dict berisi nilai-nilai default
-    untuk sidebar. Baca dengan data_only=True agar dapat nilai hasil formula.
+    Baca Modal_GGAC_v3.xlsx — referensi sel tetap sesuai struktur v3.
+    Fase 1: baris 6-9, Fase 2: baris 14-17, Penunjang: baris 22-27.
+    Totals: B37=Fase1, C37=Fase1+2, Buffer%=E36.
     """
-    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    wb   = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
     hasil = {}
 
     # ── Sheet 1: Modal Pengelola ──────────────────────────────────────────────
     if "Modal Pengelola" in wb.sheetnames:
         ws = wb["Modal Pengelola"]
-        # Cari baris TOTAL (col A berisi "TOTAL")
         for row in ws.iter_rows():
-            if str(row[0].value).strip().upper() == "TOTAL":
-                v = row[6].value   # kolom G = Nilai Buku
+            v0 = str(row[0].value or "").strip().upper()
+            if "TOTAL" in v0 and "NILAI BUKU" in v0:
+                v = row[6].value
                 if isinstance(v, (int, float)):
                     hasil["modal_pengelola"] = int(round(v))
                 break
-
-        # Baca umur ekonomis dari baris 6–10 col C
-        ue_map = {}
-        for r in range(6, 11):
-            v = ws.cell(r, 3).value
-            if isinstance(v, (int, float)):
-                ue_map[r] = int(v)
-        hasil["ue_map"] = ue_map   # {6: mesin, 7: matras, 8: besi, 9: elektronik, 10: aksesori}
-
-        # Baca data peralatan (harga beli col C, thn beli col D) mulai baris 14
         items = []
         for row in ws.iter_rows(min_row=14):
-            no  = row[0].value
-            hrg = row[2].value
-            thn = row[3].value
-            nb  = row[6].value
-            if not isinstance(no, int):
-                break
+            if not isinstance(row[0].value, int): continue
+            nb = row[6].value
             items.append({
-                "no": no,
-                "nama": row[1].value or "",
-                "harga": int(hrg) if isinstance(hrg, (int, float)) else 0,
-                "thn":   int(thn) if isinstance(thn, (int, float)) else 2020,
-                "nb":    int(round(nb)) if isinstance(nb, (int, float)) else 0,
+                "no":    row[0].value,
+                "nama":  str(row[1].value or ""),
+                "harga": int(row[2].value) if isinstance(row[2].value,(int,float)) else 0,
+                "thn":   int(row[3].value) if isinstance(row[3].value,(int,float)) else 2020,
+                "nb":    int(round(nb))    if isinstance(nb,(int,float)) else 0,
             })
         hasil["peralatan"] = items
 
-    # ── Sheet 2: Investasi Investor ───────────────────────────────────────────
+    # ── Sheet 2: Investasi Investor (struktur v3) ─────────────────────────────
     if "Investasi Investor" in wb.sheetnames:
         ws2 = wb["Investasi Investor"]
-        # Cari baris TOTAL INVESTASI AWAL (col A mengandung "TOTAL INVESTASI")
-        for row in ws2.iter_rows():
-            cell_val = str(row[0].value or "").upper()
-            if "TOTAL INVESTASI" in cell_val:
-                v = row[4].value   # kolom E
-                if isinstance(v, (int, float)):
-                    hasil["investasi"] = int(round(v))
-                break
 
-        # Baca item gym (col B nama, C qty, D harga, E total) baris 6+
-        gym_items, pend_items = [], []
-        section = "gym"
-        for row in ws2.iter_rows(min_row=6):
-            label = str(row[0].value or "").upper()
-            if "SUBTOTAL" in label or "TOTAL" in label or "BUFFER" in label:
-                if "PENUNJANG" in str(row[0].value or "").upper():
-                    section = "pend"
-                continue
-            if "FASILITAS" in label:
-                section = "pend"; continue
-            nama = row[1].value
-            qty  = row[2].value
-            hrg  = row[3].value
-            tot  = row[4].value
-            if not isinstance(row[0].value, int):
-                continue
-            entry = {
-                "nama": str(nama or ""),
-                "qty":  int(qty) if isinstance(qty, (int, float)) else 1,
-                "harga": int(hrg) if isinstance(hrg, (int, float)) else 0,
-                "total": int(round(tot)) if isinstance(tot, (int, float)) else 0,
-            }
-            if section == "gym":
-                gym_items.append(entry)
-            else:
-                pend_items.append(entry)
-        hasil["gym_items"]  = gym_items
-        hasil["pend_items"] = pend_items
+        def val(cell):
+            v = ws2[cell].value
+            return int(round(v)) if isinstance(v, (int, float)) else 0
+
+        # Totals langsung dari sel ringkasan
+        sub_f1   = val("E10")
+        sub_f2   = val("E18")
+        sub_pend = val("E28")
+        buf_pct  = ws2["E36"].value or 0.10
+        if not isinstance(buf_pct, (int, float)): buf_pct = 0.10
+        total_f1  = val("B37")
+        total_f12 = val("C37")
+
+        hasil.update({
+            "sub_fase1":    sub_f1,
+            "sub_fase2":    sub_f2,
+            "sub_pend":     sub_pend,
+            "buffer_pct":   float(buf_pct),
+            "investasi_f1": total_f1,
+            "investasi_f12":total_f12,
+            "investasi":    total_f1,
+        })
+
+        def read_items(r_start, r_end):
+            rows = []
+            for r in range(r_start, r_end+1):
+                nama = ws2.cell(r,2).value
+                qty  = ws2.cell(r,3).value
+                hrg  = ws2.cell(r,4).value
+                tot  = ws2.cell(r,5).value
+                if nama:
+                    rows.append({
+                        "nama":  str(nama),
+                        "qty":   int(qty) if isinstance(qty,(int,float)) else 0,
+                        "harga": int(hrg) if isinstance(hrg,(int,float)) else 0,
+                        "total": int(round(tot)) if isinstance(tot,(int,float)) else 0,
+                    })
+            return rows
+
+        fase1_gym  = read_items(6,  9)
+        fase2_gym  = read_items(14, 17)
+        pend_items = read_items(22, 27)
+
+        hasil["fase1_gym"]   = fase1_gym
+        hasil["fase2_gym"]   = fase2_gym
+        hasil["pend_items"]  = pend_items
+        hasil["fase1_aktif"] = [i for i in fase1_gym  if i["qty"] > 0]
+        hasil["fase2_aktif"] = [i for i in fase2_gym  if i["qty"] > 0]
+        hasil["pend_aktif"]  = [i for i in pend_items if i["qty"] > 0]
 
     return hasil
 
 
 # ─── FILE UPLOADER ───────────────────────────────────────────────────────────
-with st.expander("📂 Import dari Excel — Modal_GGAC_v2.xlsx", expanded=False):
+with st.expander("📂 Import dari Excel — Modal_GGAC_v3.xlsx", expanded=False):
     st.markdown(
-        "Upload file **Modal_GGAC_v2.xlsx** untuk mengisi otomatis nilai investasi & modal pengelola di sidebar. "
-        "Ubah angka di Excel → simpan → upload ulang → semua input terupdate."
+        "Upload file **Modal_GGAC_v3.xlsx** untuk mengisi otomatis nilai investasi & "
+        "modal pengelola di sidebar. Ubah angka di Excel → simpan → upload ulang → "
+        "semua input terupdate."
     )
     uploaded = st.file_uploader(
-        "Pilih file Modal_GGAC_v2.xlsx", type=["xlsx"],
+        "Pilih file Modal_GGAC_v3.xlsx", type=["xlsx"],
         key="modal_upload", label_visibility="collapsed"
     )
 
@@ -276,28 +276,124 @@ with st.expander("📂 Import dari Excel — Modal_GGAC_v2.xlsx", expanded=False
     if uploaded is not None:
         try:
             xl_data = parse_modal_excel(uploaded.read())
-            st.success(
-                f"✅ File terbaca.  "
-                f"Modal pengelola: **Rp {xl_data.get('modal_pengelola',0):,}**  |  "
-                f"Investasi owner: **Rp {xl_data.get('investasi',0):,}**"
-                .replace(",", ".")
+
+            # ── Pilih fase ───────────────────────────────────────────────────
+            fase_pilihan = st.radio(
+                "Hitung ROI untuk fase mana?",
+                ["Fase 1 saja (operasional sekarang)",
+                 "Fase 1 + Fase 2 (setelah scale-up)"],
+                horizontal=True, key="fase_radio"
             )
-            # Tampilkan ringkasan peralatan
-            if xl_data.get("peralatan"):
-                with st.expander("📋 Detail peralatan pengelola yang terbaca", expanded=False):
-                    df_pe = pd.DataFrame(xl_data["peralatan"])
-                    df_pe.columns = ["No","Nama","Harga Beli","Thn Beli","Nilai Buku"]
-                    for col in ["Harga Beli","Nilai Buku"]:
-                        df_pe[col] = df_pe[col].apply(lambda x: f"Rp {x:,}".replace(",","."))
-                    st.dataframe(df_pe.set_index("No"), use_container_width=True)
-            if xl_data.get("gym_items"):
-                with st.expander("📋 Detail investasi investor yang terbaca", expanded=False):
-                    df_gym = pd.DataFrame(xl_data["gym_items"])
-                    df_gym["total"] = df_gym["total"].apply(lambda x: f"Rp {x:,}".replace(",","."))
-                    st.dataframe(df_gym.rename(columns={"nama":"Item","qty":"Qty",
-                                 "harga":"Harga Satuan","total":"Total"}), use_container_width=True)
+            inv_aktif = (xl_data.get("investasi_f1", 0)
+                         if "Fase 1 saja" in fase_pilihan
+                         else xl_data.get("investasi_f12", 0))
+            xl_data["investasi"]  = inv_aktif
+            xl_data["fase_label"] = ("Fase 1 — Prioritas/Urgent"
+                                     if "Fase 1 saja" in fase_pilihan
+                                     else "Fase 1 + Fase 2 — Termasuk Pengembangan")
+
+            # ── Ringkasan modal ───────────────────────────────────────────────
+            f1  = xl_data.get("sub_fase1", 0)
+            f2  = xl_data.get("sub_fase2", 0)
+            pen = xl_data.get("sub_pend", 0)
+            buf_pct = xl_data.get("buffer_pct", 0.1)
+            mp  = xl_data.get("modal_pengelola", 0)
+
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                st.markdown(f"""
+                <div style="background:#E8F5EE;border-radius:10px;padding:.75rem 1rem;
+                            border-left:4px solid #0F6E56">
+                  <div style="font-size:11px;color:#888780;font-weight:600;
+                              text-transform:uppercase">Investasi Fase 1 (aktif)</div>
+                  <div style="font-size:18px;font-weight:700;color:#0F6E56;
+                              font-family:monospace">Rp {rp(f1)}</div>
+                  <div style="font-size:11px;color:#888780">
+                    Gym + Penunjang Rp {rp(pen)}<br>
+                    Buffer {int(buf_pct*100)}% = Rp {rp((f1+pen)*buf_pct)}
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:#0F6E56;
+                              margin-top:4px">Total: Rp {rp(xl_data.get("investasi_f1",0))}</div>
+                </div>""", unsafe_allow_html=True)
+            with col_s2:
+                st.markdown(f"""
+                <div style="background:#FDF3E3;border-radius:10px;padding:.75rem 1rem;
+                            border-left:4px solid #854F0B">
+                  <div style="font-size:11px;color:#888780;font-weight:600;
+                              text-transform:uppercase">Fase 2 (pengembangan)</div>
+                  <div style="font-size:18px;font-weight:700;color:#854F0B;
+                              font-family:monospace">Rp {rp(f2)}</div>
+                  <div style="font-size:11px;color:#888780">
+                    {len(xl_data.get("fase2_gym",[]))} item · semua Qty=0<br>
+                    Belum dihitung dalam ROI Fase 1
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:#854F0B;
+                              margin-top:4px">+Fase 2: Rp {rp(xl_data.get("investasi_f12",0))}</div>
+                </div>""", unsafe_allow_html=True)
+            with col_s3:
+                st.markdown(f"""
+                <div style="background:#EDF3FB;border-radius:10px;padding:.75rem 1rem;
+                            border-left:4px solid #185FA5">
+                  <div style="font-size:11px;color:#888780;font-weight:600;
+                              text-transform:uppercase">Modal Pengelola</div>
+                  <div style="font-size:18px;font-weight:700;color:#185FA5;
+                              font-family:monospace">Rp {rp(mp)}</div>
+                  <div style="font-size:11px;color:#888780">
+                    Nilai buku {len(xl_data.get("peralatan",[]))} item peralatan<br>
+                    existing per 2026
+                  </div>
+                  <div style="font-size:13px;font-weight:700;color:#185FA5;
+                              margin-top:4px">Aktif dipakai sekarang</div>
+                </div>""", unsafe_allow_html=True)
+
+            st.success(
+                f"✅ Terbaca.  "
+                f"ROI dihitung untuk: **{'Fase 1' if 'Fase 1 saja' in fase_pilihan else 'Fase 1+2'}**  ·  "
+                f"Investasi owner: **Rp {rp(inv_aktif)}**  ·  "
+                f"Modal pengelola: **Rp {rp(mp)}**"
+            )
+
+            # ── Detail tables ─────────────────────────────────────────────────
+            tab_f1, tab_f2, tab_pen, tab_alat = st.tabs([
+                "🟢 Fase 1 (aktif)", "🟡 Fase 2 (pengembangan)",
+                "🏠 Penunjang", "🔧 Alat Pengelola"
+            ])
+
+            def show_items(tab, items, label):
+                with tab:
+                    if items:
+                        df = pd.DataFrame(items)
+                        df["harga"] = df["harga"].apply(lambda x: f"Rp {rp(x)}")
+                        df["total"] = df["total"].apply(lambda x: f"Rp {rp(x)}")
+                        df["qty_str"] = df["qty"].apply(
+                            lambda x: str(x) if x > 0
+                            else "0 *(belum dibeli)*")
+                        st.dataframe(
+                            df[["nama","qty_str","harga","total"]].rename(columns={
+                                "nama":"Item","qty_str":"Qty",
+                                "harga":"Harga Satuan","total":"Total"}),
+                            use_container_width=True)
+                    else:
+                        st.caption(f"Tidak ada item {label}.")
+
+            show_items(tab_f1,  xl_data.get("fase1_gym",[]),  "Fase 1")
+            show_items(tab_f2,  xl_data.get("fase2_gym",[]),  "Fase 2")
+            show_items(tab_pen, xl_data.get("pend_items",[]), "penunjang")
+
+            with tab_alat:
+                alat = xl_data.get("peralatan",[])
+                if alat:
+                    df_a = pd.DataFrame(alat)
+                    df_a["harga"] = df_a["harga"].apply(lambda x: f"Rp {rp(x)}")
+                    df_a["nb"]    = df_a["nb"].apply(lambda x: f"Rp {rp(x)}")
+                    st.dataframe(
+                        df_a[["nama","thn","harga","nb"]].rename(columns={
+                            "nama":"Alat","thn":"Thn Beli",
+                            "harga":"Harga Beli","nb":"Nilai Buku 2026"}),
+                        use_container_width=True)
+
         except Exception as e:
-            st.error(f"❌ Gagal membaca file: {e}. Pastikan format file adalah Modal_GGAC_v2.xlsx yang belum diubah strukturnya.")
+            st.error(f"❌ Gagal membaca file: {e}")
             xl_data = {}
 
 # ─── HELPER FORMAT RIBUAN (titik, gaya Indonesia) ────────────────────────────
@@ -1068,6 +1164,14 @@ with col_dl2:
                     proj_years=proj_years,
                     omzet_min=omzet_min,
                     growth_m=growth_m, cost_m=cost_m,
+                    # Fase info dari Excel (jika sudah diupload)
+                    fase_label   = xl_data.get("fase_label",
+                                       "Fase 1" if xl_data else "Manual"),
+                    sub_fase1    = xl_data.get("sub_fase1",   0),
+                    sub_fase2    = xl_data.get("sub_fase2",   0),
+                    sub_pend     = xl_data.get("sub_pend",    0),
+                    buffer_pct   = xl_data.get("buffer_pct",  0.10),
+                    investasi_f12= xl_data.get("investasi_f12", investasi),
                 )
                 pdf_bytes = generate_pdf(pdf_params)
                 tanggal   = __import__('datetime').date.today().strftime('%Y%m%d')
